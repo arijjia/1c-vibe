@@ -1,0 +1,16 @@
+# секреты окружения MVP — никогда не коммитить
+mvp/.env
+.env
+
+# python
+__pycache__/
+*.pyc
+
+# macOS / редакторы
+.DS_Store
+.idea/
+.vscode/
+
+# артефакты линтера
+bsl-language-server.jar
+bsl-lint.json
