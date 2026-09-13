@@ -1,0 +1,18 @@
+stages: [lint]
+
+bsl-lint:
+  stage: lint
+  image: python:3.12-slim
+  before_script:
+    - apt-get update
+    - apt-get install -y --no-install-recommends default-jre-headless curl ca-certificates
+  script:
+    - curl -sSL -o bsl-language-server.jar
+      https://github.com/1c-syntax/bsl-language-server/releases/latest/download/bsl-language-server.jar
+    # Флаги CLI менялись между версиями BSL LS — при проблемах сверься с
+    # `java -jar bsl-language-server.jar analyze --help`.
+    - java -jar bsl-language-server.jar analyze --srcDir . --format json --outputFile bsl-lint.json || true
+    - python ci/check_lint.py bsl-lint.json
+  artifacts:
+    paths: [bsl-lint.json]
+    when: always
