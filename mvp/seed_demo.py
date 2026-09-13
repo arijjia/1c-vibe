@@ -16,7 +16,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from jira_client import api, create_issue
 
-ISSUE_TYPE = "Task"
+ISSUE_TYPE = "Задача"
 
 DEMO_TASKS = [
     (
@@ -71,7 +71,7 @@ def main() -> None:
         if dry:
             print(f"[dry] {project}: {summary}")
             continue
-        key = create_issue(project, summary, description, ISSUE_TYPE)
+        key = create_issue(project, summary, description, ISSUE_TYPE, labels=["1c-vibe-demo"])
         print(f"Создана задача {key}: {summary}")
 
 

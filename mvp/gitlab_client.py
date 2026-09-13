@@ -51,13 +51,17 @@ def _headers() -> dict:
     mode = os.environ.get("GITLAB_AUTH")
     if not mode:
         mode = "header" if token.startswith("glpat-") else "bearer"
-    auth = {"header": f"PRIVATE-TOKEN {token}", "bearer": f"Bearer {token}"}[mode]
-    return {"Authorization": auth, "Content-Type": "application/json"}
+    headers = {"Content-Type": "application/json"}
+    if mode == "header":
+        headers["PRIVATE-TOKEN"] = token
+    else:
+        headers["Authorization"] = f"Bearer {token}"
+    return headers
 
 
 def api(method: str, path: str, payload: dict | None = None) -> dict:
     data = json.dumps(payload).encode("utf-8") if payload is not None else None
-    req = urllib.request.Request(_base() + path, data=data, headers=_headers(), method=method)
+    req = urllib.request.Request(_base() + API + path, data=data, headers=_headers(), method=method)
     try:
         with urllib.request.urlopen(req) as resp:
             body = resp.read().decode("utf-8")

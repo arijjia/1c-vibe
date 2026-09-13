@@ -88,19 +88,17 @@ def add_comment(key: str, text: str) -> None:
     print(f"Комментарий добавлен к {key}.")
 
 
-def create_issue(project: str, summary: str, description: str, issuetype: str = "Task") -> str:
-    issue = api(
-        "POST",
-        f"{API}/issue",
-        {
-            "fields": {
-                "project": {"key": project},
-                "summary": summary,
-                "description": description,
-                "issuetype": {"name": issuetype},
-            }
-        },
-    )
+def create_issue(project: str, summary: str, description: str, issuetype: str = "Задача",
+                 labels: list | None = None) -> str:
+    fields = {
+        "project": {"key": project},
+        "summary": summary,
+        "description": description,
+        "issuetype": {"name": issuetype},
+    }
+    if labels:
+        fields["labels"] = labels
+    issue = api("POST", f"{API}/issue", {"fields": fields})
     return issue["key"]
 
 

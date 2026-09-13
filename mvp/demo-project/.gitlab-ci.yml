@@ -7,12 +7,13 @@ bsl-lint:
     - apt-get update
     - apt-get install -y --no-install-recommends default-jre-headless curl ca-certificates
   script:
-    - curl -sSL -o bsl-language-server.jar
-      https://github.com/1c-syntax/bsl-language-server/releases/latest/download/bsl-language-server.jar
-    # Флаги CLI менялись между версиями BSL LS — при проблемах сверься с
-    # `java -jar bsl-language-server.jar analyze --help`.
-    - java -jar bsl-language-server.jar analyze --srcDir . --format json --outputFile bsl-lint.json || true
-    - python ci/check_lint.py bsl-lint.json
+    # Версия зафиксирована: "latest" отдавал не тот артефакт; запускаемый jar — *-exec.jar
+    - curl -fsSL -o bsl-exec.jar
+      https://github.com/1c-syntax/bsl-language-server/releases/download/v1.0.7/bsl-language-server-1.0.7-exec.jar
+    # v1.0.7: подкоманда analyze; -s исходники, -r json, -o каталог отчёта (создаём заранее)
+    - mkdir -p bsl-report
+    - java -jar bsl-exec.jar analyze -s . -r json -o bsl-report -q || true
+    - python ci/check_lint.py bsl-report
   artifacts:
-    paths: [bsl-lint.json]
+    paths: [bsl-report/]
     when: always

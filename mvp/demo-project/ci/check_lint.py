@@ -1,15 +1,18 @@
 #!/usr/bin/env python3
 """Валит CI, если в отчёте BSL Language Server есть диагностики уровня Error.
 
-Формат отчёта менялся между версиями BSL LS, поэтому парсер терпимый:
-рекурсивно ищет по JSON любые поля "severity" со значением error
-(регистр не важен). Если структура отчёта не распознана — предупреждаем,
-но не валим пайплайн (чтобы не блокировать демо обновлением формата).
+Использование: python ci/check_lint.py bsl-report
 
-Использование: python ci/check_lint.py bsl-lint.json
+Аргумент — файл отчёта или каталог с отчётами (json). Формат отчёта менялся
+между версиями BSL LS, поэтому парсер терпимый: рекурсивно ищет по JSON любые
+поля "severity" со значением error (регистр не важен).
+Если отчётов нет — ошибка (анализ должен выполняться всегда).
+Если поля severity не найдены — предупреждение без падения.
 """
 
+import glob
 import json
+import os
 import sys
 
 ERROR_VALUES = {"error", "1"}  # числовые severity: 1 = Error в LSP
@@ -27,22 +30,37 @@ def iter_severities(node):
             yield from iter_severities(item)
 
 
-def main() -> None:
-    path = sys.argv[1] if len(sys.argv) > 1 else "bsl-lint.json"
-    with open(path, encoding="utf-8") as f:
-        report = json.load(f)
+def collect(path):
+    if os.path.isdir(path):
+        files = sorted(glob.glob(os.path.join(path, "**", "*.json"), recursive=True))
+    else:
+        files = [path]
+    severities = []
+    for f in files:
+        try:
+            with open(f, encoding="utf-8") as fh:
+                severities.extend(iter_severities(json.load(fh)))
+        except (OSError, json.JSONDecodeError) as e:
+            print(f"ВНИМАНИЕ: не удалось разобрать {f}: {e}")
+    return severities
 
-    severities = list(iter_severities(report))
+
+def main() -> None:
+    path = sys.argv[1] if len(sys.argv) > 1 else "bsl-report"
+    if not os.path.exists(path):
+        print(f"ОШИБКА: отчёт не найден: {path} — анализ не выполнился?")
+        sys.exit(1)
+
+    severities = collect(path)
     if not severities:
         print("ВНИМАНИЕ: поля severity не найдены — проверьте формат отчёта BSL LS.")
         print("Пайплайн не упал, но убедитесь, что анализ реально выполнился.")
         return
 
     errors = [s for s in severities if str(s).lower() in ERROR_VALUES]
-    total = len(severities)
-    print(f"Диагностик: {total}, из них уровня Error: {len(errors)}")
+    print(f"Диагностик: {len(severities)}, из них уровня Error: {len(errors)}")
     if errors:
-        print("Есть ошибки — смотрите артефакт bsl-lint.json.")
+        print("Есть ошибки — смотрите артефакт отчёта.")
         sys.exit(1)
     print("Ошибок уровня Error нет.")
 
