@@ -15,6 +15,7 @@
 
 import json
 import os
+import ssl
 import sys
 import urllib.error
 import urllib.parse
@@ -31,6 +32,8 @@ def _base() -> str:
     url = os.environ.get("GITLAB_URL")
     if not url:
         sys.exit("GITLAB_URL не задан: заполни mvp/.env (см. .env.example)")
+    if "example.local" in url:
+        sys.exit("GITLAB_URL — заглушка из .env.example: впиши реальный адрес GitLab в mvp/.env")
     return url.rstrip("/")
 
 
@@ -48,6 +51,26 @@ def _timeout() -> float:
         sys.exit("HTTP_TIMEOUT_SECONDS должен быть числом")
 
 
+def _ssl_context() -> "ssl.SSLContext":
+    """TLS-контекст: certifi как CA по умолчанию, плюс HTTPS_CA_BUNDLE / INSECURE_TLS."""
+    try:
+        import certifi
+
+        context = ssl.create_default_context(cafile=certifi.where())
+    except ImportError:
+        context = ssl.create_default_context()
+    bundle = os.environ.get("HTTPS_CA_BUNDLE")
+    if bundle:
+        if not os.path.isfile(bundle):
+            sys.exit(f"HTTPS_CA_BUNDLE указывает не на файл: {bundle}")
+        context.load_verify_locations(bundle)
+    if os.environ.get("INSECURE_TLS", "").lower() in {"1", "true", "yes"}:
+        context.check_hostname = False
+        context.verify_mode = ssl.CERT_NONE
+        print("ВНИМАНИЕ: проверка TLS-сертификата отключена (INSECURE_TLS=1)", file=sys.stderr)
+    return context
+
+
 def api(method: str, path: str, payload: dict | None = None) -> dict | list:
     data = json.dumps(payload).encode("utf-8") if payload is not None else None
     api_path = path if path.startswith("/") else f"/{path}"
@@ -58,14 +81,17 @@ def api(method: str, path: str, payload: dict | None = None) -> dict | list:
         method=method,
     )
     try:
-        with urllib.request.urlopen(req, timeout=_timeout()) as resp:
+        with urllib.request.urlopen(req, timeout=_timeout(), context=_ssl_context()) as resp:
             body = resp.read().decode("utf-8")
             return json.loads(body) if body else {}
     except urllib.error.HTTPError as e:
         detail = e.read().decode("utf-8", "replace")[:500]
         sys.exit(f"GitLab ответил {e.code}: {detail}")
     except urllib.error.URLError as e:
-        sys.exit(f"Не удалось соединиться с {_base()}: {e.reason}")
+        sys.exit(
+            f"Не удалось соединиться с {_base()}: {e.reason}\n"
+            "Проверь GITLAB_URL в mvp/.env (адрес доступен? VPN поднят?)"
+        )
 
 
 def encoded_path(project: str) -> str:
