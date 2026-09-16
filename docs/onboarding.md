@@ -1,12 +1,13 @@
 # Онбординг с чистого компьютера: от клона репы до «задача из Jira → MR»
 
-Для кого: человек с доступами к Jira и GitLab (UTMN), пустой macOS.
-Итог: агент в DeepSeek Harness берёт задачу `INTAIDEV-N`, правит демо-репо
-и открывает Merge Request.
+Для кого: человек с доступами к Jira и GitLab (UTMN), пустой компьютер
+(macOS / Windows / Linux). Итог: агент в DeepSeek Harness берёт задачу
+`INTAIDEV-N`, правит демо-репо и открывает Merge Request.
 
 ## 0. Что понадобится
 
-- macOS с терминалом; доступ в сеть `utmn.ru` (при необходимости — VPN).
+- Терминал; доступ в сеть `utmn.ru` (при необходимости — VPN).
+- Node.js 20+ (для харнеса) — ставим ниже.
 - Логин/токены:
   - Jira Personal Access Token: профиль пользователя → «Персональные токены».
   - GitLab Personal Access Token со scope `api`: GitLab → Preferences → Access Tokens.
@@ -14,13 +15,37 @@
 
 ## 1. Инструменты
 
+**Git** — официальный установщик с git-scm.com, либо пакетный менеджер:
+
 ```
-# uv (управляет питоном сам, системный Python не нужен)
-brew install uv git
-# git настрой под себя, иначе будут проблемы с commit/push
+macOS:  brew install git          # или xcode-select --install
+Windows: winget install --id Git.Git
+Linux:  sudo apt install git      # или dnf/pacman
+```
+
+Настрой под себя, иначе будут проблемы с commit/push:
+
+```
 git config --global user.name "Имя Фамилия"
 git config --global user.email "you@utmn.ru"
 ```
+
+**uv** (управляет питоном сам, системный Python не нужен):
+
+```
+macOS / Linux:   curl -LsSf https://astral.sh/uv/install.sh | sh
+Windows (PowerShell): powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+**Node.js 20+** (нужен для DeepSeek Harness):
+
+```
+macOS:   brew install node@22     # или установщик с nodejs.org
+Windows: winget install OpenJS.NodeJS.LTS
+Linux:   см. nodejs.org — пакетный менеджер твоего дистрибутива
+```
+
+Проверка: `git --version && uv --version && node --version`.
 
 ## 2. Репозиторий MVP
 
@@ -68,21 +93,42 @@ uv run python3 jira_client.py get INTAIDEV-1
 Если `CERTIFICATE_VERIFY_FAILED` — ничего отключать не надо: клиенты уже
 используют certifi; для корпоративного CA укажи `HTTPS_CA_BUNDLE=/путь/ca.pem`.
 
-## 4. DeepSeek Harness (dsh) и модель
+## 4. DeepSeek Harness (dsh): установка, настройка, запуск
 
-Харнес ставится отдельно от этой репы (инструкция — у владельца установки:
-`/opt/homebrew/lib`, веб-морда `http://127.0.0.1:3080`). Первый запуск:
+dsh — это npm-пакет `@deepseek-ai/dsh`, консольная программа поверх Node.js.
+Работает на macOS, Windows и Linux.
+
+### 4.1 Установка
 
 ```
-dsh
+npm install -g @deepseek-ai/dsh
+dsh --version        # проверка: должно напечатать версию, например 0.1.5-rc.1
 ```
 
-Дальше — конфигурация модели. Нужны два файла в `~/.dsh`:
+Если `npm: command not found` — не установлен Node.js, вернись к шагу 1.
 
-**`~/.dsh/settings.yaml`** — описать провайдера `utmn` (OpenAI-совместимый
-LiteLLM) внутри `llm-pi-ai.providers`:
+### 4.2 Запуск
+
+```
+dsh web
+```
+
+Поднимает веб-интерфейс агента на `http://127.0.0.1:3080` — открой его в
+браузере. Терминал при этом держи открытым (там живёт сервер; Ctrl+C — стоп).
+
+Домашний каталог харнеса — `~/.dsh` (Windows: `%USERPROFILE%\.dsh`). Там лежат
+настройки, скиллы, сессии и креды. Каталог создаётся при первом запуске.
+
+### 4.3 Модель: провайдер utmn (LiteLLM)
+
+Нужны два файла в `~/.dsh`. Создай/дополни их любым редактором.
+
+**`~/.dsh/settings.yaml`** — внутри секции `llm-pi-ai.providers` описать
+провайдера (OpenAI-совместимый LiteLLM):
 
 ```yaml
+llm-pi-ai:
+  providers:
     utmn:
       apiKeyEnv: LITELLM_API_KEY
       api: openai-completions
@@ -98,15 +144,18 @@ LiteLLM) внутри `llm-pi-ai.providers`:
           maxTokens: 65536
 ```
 
-**`~/.dsh/.credentials.yaml`** — сюда и только сюда ключ (секция `refs`):
+**`~/.dsh/.credentials.yaml`** — сюда и только сюда ключ (секция `refs`;
+файл в git не попадает, ключ не вставляй в код и чаты):
 
 ```yaml
+version: 1
 refs:
   LITELLM_API_KEY: "sk-..."
 ```
 
-Выбор модели по умолчанию — переопределение `agent-default-model`
-(в этой установке это `~/.dsh/utmn-model.patch.yml`):
+**Модель по умолчанию.** В веб-морде (`Settings → Models`) выбери
+`utmn / qwen-3.8-deep` для агента — этого достаточно. Либо пропиши
+принудительно файлом `~/.dsh/utmn-model.patch.yml`:
 
 ```yaml
 - id: agent-default-model
@@ -115,8 +164,12 @@ refs:
     model: qwen-3.8-deep
 ```
 
-После правки конфигов перезапусти харнес. В списке моделей появятся
-qwen-модели; выбери `qwen-3.8-deep` как рабочую.
+После правки конфигов перезапусти `dsh web` (Ctrl+C и снова).
+
+### 4.4 Проверка модели
+
+В веб-морде создай сессию, убедись, что в селекторе моделей выбрана
+qwen-модель, и спроси что-нибудь. Если пришёл ответ — модель живая.
 
 ## 5. Скилл агента
 
@@ -126,11 +179,21 @@ qwen-модели; выбери `qwen-3.8-deep` как рабочую.
 скиллов харнеса (или укажи путь в prompt'е) — дальше агенту достаточно сказать:
 «выполни задачу INTAIDEV-2 по скиллу 1c-vibe-demo».
 
-## 6. Типовой цикл работы
+## 6. Демо-репозиторий и типовой цикл
 
-1. Открыл харнес, написал: «пофикси INTAIDEV-2 и сделай MR».
-2. Агент сам: читает задачу, готовит ветку, правит код, публикует MR,
-   комментирует задачу. Тебе остаются ссылки на MR и задачу.
+Демо-репо клонируется в `mvp/dump/` (каталог в git не попадает — это рабочая
+песочница агента):
+
+```
+cd mvp/dump
+git clone https://gitlab.utmn.ru/rd/1c-ai/1c-vibe-demo.git
+```
+
+Дальше работа одной фразой в харнесе:
+
+1. Открыл `dsh web`, написал: «пофикси INTAIDEV-2 и сделай MR».
+2. Агент сам: читает задачу, готовит ветку `agent/INTAIDEV-2`, правит код,
+   публикует MR, комментирует задачу. Тебе остаются ссылки на MR и задачу.
 3. Ревьюишь MR в GitLab, мёржишь.
 
 ## Частые проблемы

@@ -14,3 +14,7 @@ __pycache__/
 # артефакты линтера
 bsl-language-server.jar
 bsl-lint.json
+
+# локальный клон демо-репозитория (рабочая песочница агента)
+mvp/dump/*
+!mvp/dump/README.md
