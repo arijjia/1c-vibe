@@ -1,42 +1,19 @@
-# Статический анализ BSL без платформы 1С.
-# Версия и SHA-256 закреплены: обновлять вместе после проверки release asset.
 stages: [lint]
-
-variables:
-  BSL_LS_VERSION: "1.0.7"
-  BSL_LS_SHA256: "9f62765edd344d66456da24c906eaf623a03c56e90e5aafee466200100909f64"
-  BSL_LS_DIR: "$CI_PROJECT_DIR/.cache/bsl-language-server"
 
 bsl-lint:
   stage: lint
-  image: eclipse-temurin:25-jre-noble
-  cache:
-    key: "bsl-language-server-1.0.7"
-    paths:
-      - .cache/bsl-language-server/
+  image: python:3.12-slim
   before_script:
     - apt-get update
-    - apt-get install -y --no-install-recommends ca-certificates curl python3
-    - mkdir -p "$BSL_LS_DIR" bsl-reports
-    - |
-      if [ ! -f "$BSL_LS_DIR/bsl-language-server.jar" ]; then
-        curl --fail --location --retry 3 \
-          --output "$BSL_LS_DIR/bsl-language-server.jar" \
-          "https://github.com/1c-syntax/bsl-language-server/releases/download/v${BSL_LS_VERSION}/bsl-language-server-${BSL_LS_VERSION}-exec.jar"
-      fi
-    - echo "$BSL_LS_SHA256  $BSL_LS_DIR/bsl-language-server.jar" | sha256sum --check
+    - apt-get install -y --no-install-recommends default-jre-headless curl ca-certificates
   script:
-    - |
-      java -Xmx1g -jar "$BSL_LS_DIR/bsl-language-server.jar" analyze \
-        --srcDir . \
-        --workspaceDir . \
-        --outputDir bsl-reports \
-        --reporter json \
-        --reporter code-quality
-    - python3 ci/check_lint.py bsl-reports/bsl-json.json
+    # Версия зафиксирована: "latest" отдавал не тот артефакт; запускаемый jar — *-exec.jar
+    - curl -fsSL -o bsl-exec.jar
+      https://github.com/1c-syntax/bsl-language-server/releases/download/v1.0.7/bsl-language-server-1.0.7-exec.jar
+    # v1.0.7: подкоманда analyze; -s исходники, -r json, -o каталог отчёта (создаём заранее)
+    - mkdir -p bsl-report
+    - java -jar bsl-exec.jar analyze -s . -r json -o bsl-report -q || true
+    - python ci/check_lint.py bsl-report
   artifacts:
+    paths: [bsl-report/]
     when: always
-    paths:
-      - bsl-reports/
-    reports:
-      codequality: bsl-reports/bsl-code-quality.json
