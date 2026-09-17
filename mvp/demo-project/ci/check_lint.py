@@ -1,67 +1,61 @@
 #!/usr/bin/env python3
-"""Валит CI, если в отчёте BSL Language Server есть диагностики уровня Error.
+"""Fail-closed проверка JSON-отчёта BSL Language Server 1.0.x.
 
-Использование: python ci/check_lint.py bsl-report
-
-Аргумент — файл отчёта или каталог с отчётами (json). Формат отчёта менялся
-между версиями BSL LS, поэтому парсер терпимый: рекурсивно ищет по JSON любые
-поля "severity" со значением error (регистр не важен).
-Если отчётов нет — ошибка (анализ должен выполняться всегда).
-Если поля severity не найдены — предупреждение без падения.
+Пайплайн падает, если отчёт отсутствует/повреждён/имеет неизвестную структуру
+или содержит диагностики уровня Error. Чистый отчёт без диагностик допустим.
 """
 
-import glob
 import json
-import os
+from pathlib import Path
 import sys
 
-ERROR_VALUES = {"error", "1"}  # числовые severity: 1 = Error в LSP
+ERROR_VALUES = {"error", "1"}  # 1 = Error по Language Server Protocol
 
 
-def iter_severities(node):
-    if isinstance(node, dict):
-        for key, value in node.items():
-            if key.lower() == "severity":
-                yield value
-            else:
-                yield from iter_severities(value)
-    elif isinstance(node, list):
-        for item in node:
-            yield from iter_severities(item)
+def diagnostics(report: object) -> list[dict]:
+    if not isinstance(report, dict):
+        raise ValueError("корень JSON должен быть объектом")
+    fileinfos = report.get("fileinfos")
+    if not isinstance(fileinfos, list):
+        raise ValueError("в отчёте нет массива fileinfos")
+
+    result = []
+    for index, fileinfo in enumerate(fileinfos):
+        if not isinstance(fileinfo, dict):
+            raise ValueError(f"fileinfos[{index}] должен быть объектом")
+        items = fileinfo.get("diagnostics")
+        if not isinstance(items, list):
+            raise ValueError(f"fileinfos[{index}].diagnostics должен быть массивом")
+        for diagnostic in items:
+            if not isinstance(diagnostic, dict) or "severity" not in diagnostic:
+                raise ValueError("диагностика не содержит severity")
+            result.append(diagnostic)
+    return result
 
 
-def collect(path):
-    if os.path.isdir(path):
-        files = sorted(glob.glob(os.path.join(path, "**", "*.json"), recursive=True))
-    else:
-        files = [path]
-    severities = []
-    for f in files:
-        try:
-            with open(f, encoding="utf-8") as fh:
-                severities.extend(iter_severities(json.load(fh)))
-        except (OSError, json.JSONDecodeError) as e:
-            print(f"ВНИМАНИЕ: не удалось разобрать {f}: {e}")
-    return severities
+def check_report(report: object) -> tuple[int, int]:
+    items = diagnostics(report)
+    errors = [
+        item
+        for item in items
+        if str(item["severity"]).strip().lower() in ERROR_VALUES
+    ]
+    return len(items), len(errors)
 
 
 def main() -> None:
-    path = sys.argv[1] if len(sys.argv) > 1 else "bsl-report"
-    if not os.path.exists(path):
-        print(f"ОШИБКА: отчёт не найден: {path} — анализ не выполнился?")
-        sys.exit(1)
+    path = Path(sys.argv[1] if len(sys.argv) > 1 else "bsl-reports/bsl-json.json")
+    if not path.is_file():
+        sys.exit(f"Отчёт BSL LS не создан: {path}")
+    try:
+        report = json.loads(path.read_text(encoding="utf-8"))
+        total, errors = check_report(report)
+    except (OSError, json.JSONDecodeError, ValueError) as error:
+        sys.exit(f"Некорректный отчёт BSL LS: {error}")
 
-    severities = collect(path)
-    if not severities:
-        print("ВНИМАНИЕ: поля severity не найдены — проверьте формат отчёта BSL LS.")
-        print("Пайплайн не упал, но убедитесь, что анализ реально выполнился.")
-        return
-
-    errors = [s for s in severities if str(s).lower() in ERROR_VALUES]
-    print(f"Диагностик: {len(severities)}, из них уровня Error: {len(errors)}")
+    print(f"Диагностик: {total}, из них уровня Error: {errors}")
     if errors:
-        print("Есть ошибки — смотрите артефакт отчёта.")
-        sys.exit(1)
+        sys.exit("Есть ошибки — смотрите артефакт bsl-reports/bsl-json.json.")
     print("Ошибок уровня Error нет.")
 
 
