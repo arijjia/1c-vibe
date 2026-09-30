@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -54,18 +55,105 @@ def build_system_prompt() -> str:
     return SYSTEM_TEMPLATE.format(skill=skill)
 
 
+JSON_MODE_SUFFIX = """
+
+РЕЖИМ JSON: отвечай СТРОГО одним JSON-объектом без markdown и пояснений:
+  {"tool": "<имя инструмента>", "arguments": {…аргументы…}}
+или, когда всё сделано и готов финальный ответ:
+  {"final": "<текст отчёта по-русски>"}
+"""
+
+JSON_SCHEMA_HINT = """Доступные инструменты (имя → аргументы):
+- run_cmd {command: str, timeout_s?: int} — shell-команда в workspace;
+- run_cli {args: str} — CLI проекта: jira_client.py / gitlab_client.py / publish.py / seed_demo.py;
+- read_file {path: str}; write_file {path: str, content: str}; list_dir {path?: str}.
+"""
+
+
+def _json_mode_message(choice: dict) -> dict | None:
+    """Разобрать ответ JSON-режима: синтезировать tool_calls или вернуть final."""
+    content = (choice.get("content") or "").strip()
+    if not content:
+        return None
+    text = content
+    if text.startswith("```"):  # снять markdown-забор, если модель его добавила
+        text = text.strip("`")
+        if text.lower().startswith("json"):
+            text = text[4:]
+    try:
+        parsed = json.loads(text)
+    except json.JSONDecodeError:
+        # модель ответила текстом не по протоколу — считаем это финалом
+        return choice
+    if isinstance(parsed, dict) and parsed.get("tool"):
+        return {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [{
+                "id": f"json_{int(time.time())}",
+                "type": "function",
+                "function": {
+                    "name": parsed["tool"],
+                    "arguments": json.dumps(parsed.get("arguments", {}), ensure_ascii=False),
+                },
+            }],
+        }
+    if isinstance(parsed, dict) and "final" in parsed:
+        return {"role": "assistant", "content": str(parsed["final"])}
+    return choice  # непонятный JSON — показываем как есть
+
+
+def _chat_turn(pool: LlmPool, messages: list[dict],
+               tools_broken: set[str]) -> tuple[dict, object, bool]:
+    """Один ход к модели: (choice, provider, json_mode).
+
+    Идём по провайдерам. Если провайдер отвечает, но не принял tools API —
+    один раз пробуем тот же провайдер в JSON-режиме (суффикс к последнему
+    сообщению, история не засоряется) и помечаем его в tools_broken.
+    """
+    last_error: Exception | None = None
+    for provider in pool.providers:
+        json_mode = provider.name in tools_broken
+        msgs = messages
+        if json_mode:
+            msgs = messages + [{"role": "system",
+                                "content": JSON_SCHEMA_HINT + JSON_MODE_SUFFIX}]
+        try:
+            return provider.chat(msgs, tools=None if json_mode else TOOLS_SCHEMA), provider, json_mode
+        except ConnectionError as error:
+            last_error = error
+            if not json_mode:
+                try:
+                    choice = provider.chat(
+                        messages + [{"role": "system",
+                                     "content": JSON_SCHEMA_HINT + JSON_MODE_SUFFIX}],
+                        tools=None)
+                    tools_broken.add(provider.name)
+                    log(f"{provider.name}: tools API не принят ({error}); "
+                        "работаю в JSON-режиме")
+                    return choice, provider, True
+                except ConnectionError as second_error:
+                    last_error = second_error
+    raise ConnectionError(f"ни один провайдер не ответил: {last_error}")
+
+
 def run(pool: LlmPool, toolbox: Toolbox, goal: str) -> str:
     messages: list[dict] = [
         {"role": "system", "content": build_system_prompt()},
         {"role": "user", "content": goal},
     ]
+    tools_broken: set[str] = set()
     for turn in range(1, MAX_TURNS + 1):
-        choice, provider = pool.chat(messages, tools=TOOLS_SCHEMA)
+        choice, provider, json_mode = _chat_turn(pool, messages, tools_broken)
+        if json_mode:
+            choice = _json_mode_message(choice)
+            if choice is None:
+                return "модель вернула пустой ответ в JSON-режиме — стоп"
         messages.append(choice)
         tool_calls = choice.get("tool_calls") or []
         content = (choice.get("content") or "").strip()
         if not tool_calls:
-            log(f"петля завершена на ходе {turn} (провайдер {provider})")
+            log(f"петля завершена на ходе {turn} (провайдер {provider.name})")
             return content or "(пустой ответ модели)"
         log(f"ход {turn}: {len(tool_calls)} вызов(ов) инструментов")
         for call in tool_calls:
