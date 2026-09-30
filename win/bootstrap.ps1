@@ -1,9 +1,12 @@
 # bootstrap.ps1 — подготовка Windows-машины контура 1c-vibe (ЦИТ ТюмГУ).
 # Запускать в PowerShell от пользователя:
 #   Set-ExecutionPolicy -Scope Process Bypass -Force; .\bootstrap.ps1
-# Что делает: проверяет git/python, клонирует репозиторий, создаёт .env
-# из шаблона, проверяет связь с LLM и печатает чек-лист.
+# Два режима получения кода:
+#   .\bootstrap.ps1                 — клон с GitHub (если репо доступна)
+#   .\bootstrap.ps1 -Bundle b64.txt — из base64-бандла (receive_bundle.py)
+# Что делает: проверяет git/python, получает код, создаёт .env, проверяет LLM.
 
+param([string]$Bundle = "")
 $ErrorActionPreference = "Stop"
 $RepoUrl = "https://github.com/arijjia/1c-vibe.git"
 $Root    = "$HOME\1c-vibe"
@@ -23,9 +26,20 @@ if ($need.Count -gt 0) {
     $env:Path = [Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [Environment]::GetEnvironmentVariable("Path", "User")
 } else { Write-Host "git и python уже установлены" }
 
-Step "2/5 Клонирование репозитория $RepoUrl"
-if (Test-Path $Root) { Write-Host "каталог уже есть: $Root" }
-else { git clone $RepoUrl $Root }
+Step "2/5 Получение кода"
+if ($Bundle -ne "") {
+    if (-not (Test-Path $Bundle)) { throw "бандл не найден: $Bundle" }
+    $b64 = (Get-Content $Bundle -Raw).Trim()
+    $zipPath = "$env:TEMP\1cvibe.zip"
+    [IO.File]::WriteAllBytes($zipPath, [Convert]::FromBase64String($b64))
+    New-Item -ItemType Directory -Force -Path $Root | Out-Null
+    Expand-Archive -Path $zipPath -DestinationPath $Root -Force
+    Write-Host "распаковано в $Root"
+} elseif (Test-Path $Root) {
+    Write-Host "каталог уже есть: $Root"
+} else {
+    git clone $RepoUrl $Root
+}
 
 Step "3/5 Файл настроек mvp/.env"
 $envFile = "$Root\mvp\.env"
