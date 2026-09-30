@@ -95,3 +95,19 @@ class GuardTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class GitExcludeTest(unittest.TestCase):
+    def test_exclude_seeded_in_git_repo(self) -> None:
+        import subprocess
+        repo = Path(tempfile.mkdtemp())
+        try:
+            subprocess.run(["git", "init", "-q", "-b", "main", str(repo)], check=True)
+            toolbox = Toolbox(repo)
+            exclude = repo / ".git" / "info" / "exclude"
+            text = exclude.read_text(encoding="utf-8")
+            self.assertIn("audit.log", text)
+            self.assertIn(".bsl-ls/", text)
+        finally:
+            import shutil
+            shutil.rmtree(repo, ignore_errors=True)

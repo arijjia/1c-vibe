@@ -46,6 +46,28 @@ class Toolbox:
                                        "publish.py", "seed_demo.py", "lint.py"]
         self.audit_path = self.workspace / "audit.log"
         self._audit("session", f"старт тулбокса, workspace={self.workspace}, mvp={self.mvp_root}")
+        self._seed_git_exclude()
+
+    def _seed_git_exclude(self) -> None:
+        """Служебные файлы петли не должны попадать в коммиты: прописываем их
+        в локальный .git/info/exclude клона (не трогая сам репозиторий)."""
+        git_dir = self.workspace / ".git"
+        if not git_dir.exists():
+            return
+        exclude = git_dir / "info" / "exclude"
+        try:
+            exclude.parent.mkdir(parents=True, exist_ok=True)
+            existing = exclude.read_text(encoding="utf-8") if exclude.exists() else ""
+            needed = ["audit.log", ".bsl-ls/"]
+            missing = [n for n in needed if n not in existing]
+            if missing:
+                with open(exclude, "a", encoding="utf-8") as handle:
+                    if existing and not existing.endswith("\n"):
+                        handle.write("\n")
+                    handle.write("# 1c-vibe: служебные файлы агентской петли\n")
+                    handle.write("\n".join(missing) + "\n")
+        except OSError:
+            pass  # exclude — страховка; её отсутствие не ломает петлю
 
     # ── служебное ────────────────────────────────────────────────────────────
 

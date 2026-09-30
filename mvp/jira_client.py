@@ -40,9 +40,23 @@ def _base() -> str:
 
 
 def _headers() -> dict:
+    """Basic (JIRA_USER + JIRA_PASSWORD) или Bearer PAT (JIRA_TOKEN).
+
+    Basic удобен для Server/DC, когда PAT ещё не выпущен: логин = короткий
+    доменный, пароль — доменный. Приоритет: Basic, если заданы оба поля.
+    """
+    user = os.environ.get("JIRA_USER", "")
+    password = os.environ.get("JIRA_PASSWORD", "")
+    if user and password:
+        import base64
+        creds = base64.b64encode(f"{user}:{password}".encode("utf-8")).decode("ascii")
+        return {
+            "Authorization": f"Basic {creds}",
+            "Content-Type": "application/json",
+        }
     token = os.environ.get("JIRA_TOKEN")
     if not token:
-        sys.exit("JIRA_TOKEN не задан: заполни mvp/.env (см. .env.example)")
+        sys.exit("не задана авторизация: JIRA_USER+JIRA_PASSWORD или JIRA_TOKEN")
     return {
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
