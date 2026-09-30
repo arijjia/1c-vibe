@@ -190,6 +190,14 @@ def main() -> None:
     workspace.mkdir(parents=True, exist_ok=True)
     toolbox = Toolbox(workspace)
     pool = pool_from_env()
+
+    from guard import check_goal  # guard читает .env через pool_from_env
+    safe, verdict = check_goal(goal)
+    log(f"guard: {'OK' if safe else 'БЛОК'} ({verdict})")
+    if not safe:
+        print("ЦЕЛЬ ОТКЛОНЕНА GUARD-МОДЕЛЬЮ:", verdict)
+        raise SystemExit(2)
+
     report = run(pool, toolbox, goal)
     print("\n=== ОТЧЁТ АГЕНТА ===")
     print(report)
