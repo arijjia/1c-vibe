@@ -43,7 +43,7 @@ class Toolbox:
         self.workspace = workspace.resolve()
         self.mvp_root = (mvp_root or Path(__file__).resolve().parent.parent / "mvp").resolve()
         self.extra_cli = extra_cli or ["jira_client.py", "gitlab_client.py",
-                                       "publish.py", "seed_demo.py"]
+                                       "publish.py", "seed_demo.py", "lint.py"]
         self.audit_path = self.workspace / "audit.log"
         self._audit("session", f"старт тулбокса, workspace={self.workspace}, mvp={self.mvp_root}")
 
