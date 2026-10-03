@@ -1,6 +1,24 @@
-__pycache__/
+# секреты окружения MVP — никогда не коммитить
+mvp/.env
 .env
-dump/
-*.log
+
+# python
+__pycache__/
+*.pyc
+
+# macOS / редакторы
+.DS_Store
+.idea/
+.vscode/
+
+# артефакты линтера
+bsl-language-server.jar
+bsl-lint.json
+
+# локальный клон демо-репозитория (рабочая песочница агента)
+mvp/dump/*
+!mvp/dump/README.md
+
+# дом-слой dsh-агента: креды/runtime — мимо git, патч остаётся в репо
 /dsh-home/*
 !/dsh-home/cordis.patch.yml
