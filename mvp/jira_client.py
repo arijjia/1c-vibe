@@ -142,6 +142,23 @@ def add_comment(key: str, text: str) -> None:
     print(f"Комментарий добавлен к {key}.")
 
 
+def create_issue(project: str, summary: str, description: str,
+                 issue_type: str = "Задача", labels: list[str] | None = None) -> str:
+    """Создать задачу в проекте; вернуть ключ (например INTAIDEV-4)."""
+    fields: dict = {
+        "project": {"key": project},
+        "summary": summary,
+        "description": description,
+        "issuetype": {"name": issue_type},
+    }
+    if labels:
+        fields["labels"] = labels
+    created = api("POST", f"{API}/issue", {"fields": fields})
+    if not isinstance(created, dict) or "key" not in created:
+        sys.exit("Jira вернула неожиданный ответ при создании задачи")
+    return str(created["key"])
+
+
 def main() -> None:
     if len(sys.argv) < 3:
         print(__doc__)
