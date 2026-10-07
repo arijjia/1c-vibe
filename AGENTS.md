@@ -20,7 +20,7 @@
 - Jira: https://jira.utmn.ru, проект INTAIDEV (Basic-авторизация).
 - GitLab: https://gitlab.utmn.ru, проект rd/1c-ai/1c-vibe-demo.
 - Учётные данные: в `mvp/.env` (JIRA_URL/JIRA_USER/JIRA_PASSWORD,
-  GITLAB_URL/GITLAB_TOKEN, LLM_*). Скрипты читают его сами через
+  GITLAB_URL/GITLAB_TOKEN). Скрипты читают его сами через
   `mvp/envconfig.py`. Содержимое .env НИКОГДА не печатай в ответах.
 
 ## Задачи Jira
