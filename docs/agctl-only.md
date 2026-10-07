@@ -80,7 +80,7 @@
 
 ## Что дальше (не в этой карточке)
 
-- CLI-команда agctl «создать/запустить рабочее место» (в бинаре сейчас
-  только `serve`/`migrate`/`backlog`/`version`).
+- CLI-команда agctl «создать рабочее место» — готова (`agctl workspace create`,
+  карточка `workspace-cli` закрыта; живой прогон — в `clean-machine-run`).
 - Аудит удаления legacy-кода B1–B3.
 - Замена `AGENTS.md`/`docs/onboarding.md` на agctl-онбординг.
