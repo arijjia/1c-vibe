@@ -45,8 +45,7 @@ cp .env.example .env                      # заполни JIRA_*, GITLAB_*, DEM
 
 # 3. Агентская среда — изолированный дом проекта (не трогает личный ~/.dsh)
 npm install -g @deepseek-ai/dsh
-cd ..                                      # корень репы 1c-vibe
-DSH_HOME="$PWD/dsh-home" dsh web --port 3099 --no-open
+DSH_HOME="$(git rev-parse --show-toplevel)/dsh-home" dsh web --port 3099 --no-open
 # открой напечатанную ссылку с одноразовым токеном
 
 # 4. Модель: провайдер utmn (LiteLLM) — см. onboarding.md, раздел 4

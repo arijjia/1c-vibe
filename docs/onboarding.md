@@ -138,9 +138,10 @@ dsh --version        # проверка: должно напечатать ве�
 **Вариант А — постоянный дом проекта `dsh-home/` (повседневная работа):**
 
 ```bash
-cd <корень репы 1c-vibe>
-DSH_HOME="$PWD/dsh-home" dsh web --port 3099 --no-open
-# Windows PowerShell: $env:DSH_HOME="$PWD\dsh-home"; dsh web --port 3099 --no-open
+# из любого каталога репы — git сам найдёт корень
+DSH_HOME="$(git rev-parse --show-toplevel)/dsh-home" dsh web --port 3099 --no-open
+# Windows PowerShell: cd в корень репы, затем
+#   $env:DSH_HOME="$PWD\dsh-home"; dsh web --port 3099 --no-open
 ```
 
 Открой напечатанную ссылку — в ней одноразовый токен входа. Сессии, креды
