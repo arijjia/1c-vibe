@@ -16,6 +16,7 @@ set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 CLEANROOM="${DSH_CLEANROOM:-$HOME/.dsh-cleanroom}"
+case "$CLEANROOM" in /*) ;; *) CLEANROOM="$PWD/$CLEANROOM" ;; esac
 PORT="3098"
 
 for arg in "$@"; do
@@ -27,11 +28,16 @@ for arg in "$@"; do
 done
 
 if [[ -n "${RESET:-}" ]]; then
+  if [[ "$CLEANROOM" == "$REPO/dsh-home" ]]; then
+    echo "отказ: --reset не удаляет репозиторный dsh-home (там есть tracked cordis.patch.yml)" >&2
+    exit 2
+  fi
   echo ">> сношу $CLEANROOM"
   rm -rf "$CLEANROOM"
 fi
 
-if [[ -d "$CLEANROOM/settings.yaml" || -f "$CLEANROOM/settings.yaml" ]]; then
+# dsh после импорта может переименовать settings.yaml в settings.yaml.imported.
+if [[ -f "$CLEANROOM/settings.yaml" || -f "$CLEANROOM/settings.yaml.imported" ]]; then
   echo ">> чистая комната уже настроена: $CLEANROOM"
 else
   echo ">> создаю чистую комнату: $CLEANROOM"

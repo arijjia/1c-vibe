@@ -43,9 +43,10 @@ uv sync                                   # создаст .venv, Python ста�
 # 2. Доступы к Jira и GitLab
 cp .env.example .env                      # заполни JIRA_*, GITLAB_*, DEMO_PROJECT
 
-# 3. Агентская среда — изолированный дом проекта (не трогает личный ~/.dsh)
+# 3. Агентская среда — изолированный и автоматически настроенный дом проекта
 npm install -g @deepseek-ai/dsh
-DSH_HOME="$(git rev-parse --show-toplevel)/dsh-home" dsh web --port 3099 --no-open
+cd "$(git rev-parse --show-toplevel)"
+DSH_CLEANROOM="$PWD/dsh-home" scripts/cleanroom-dsh.sh 3099
 # открой напечатанную ссылку с одноразовым токеном
 
 # 4. Модель: провайдер utmn (LiteLLM) — см. onboarding.md, раздел 4
