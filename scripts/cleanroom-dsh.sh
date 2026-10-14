@@ -73,6 +73,31 @@ YAML
   # скилл из репы — единственная «инструкция», которую видит агент
   cp -R "$REPO/mvp/skills/1c-vibe-demo" "$CLEANROOM/skills/"
   echo ">> скилл 1c-vibe-demo установлен"
+
+  # реестр воркспейсов: сессии открываются в корне этой репы, а не в
+  # дефолтной папке dsh (иначе агент не видит AGENTS.md и скилл репы;
+  # формат — workspace domain v2)
+  NOW="$(date -u +%Y-%m-%dT%H:%M:%S.000Z)"
+  mkdir -p "$CLEANROOM/storages"
+  cat > "$CLEANROOM/storages/workspace.json" <<JSON
+{
+  "unit": {"name": "workspace", "version": 2},
+  "global": {
+    "initialized": true,
+    "defaultWorkspaceId": "ws-1c-vibe",
+    "workspaceIds": ["ws-1c-vibe"],
+    "archivedSessionIds": [],
+    "pinnedSessionIds": []
+  },
+  "tables": {"workspaces": {"ws-1c-vibe": {
+    "path": "$REPO",
+    "title": "1c-vibe",
+    "sessionIds": [],
+    "createdAt": "$NOW",
+    "updatedAt": "$NOW"}}}
+}
+JSON
+  echo ">> рабочая папка сессий: $REPO"
 fi
 
 echo ">> запускаю dsh web: http://127.0.0.1:${PORT}  (DSH_HOME=$CLEANROOM)"
