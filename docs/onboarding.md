@@ -162,7 +162,9 @@ scripts/cleanroom-dsh.sh --reset    # снести и пересоздать с 
 ```
 
 Скрипт сам пропишет провайдера utmn, спросит ключ LiteLLM (или возьмёт
-из env `LITELLM_API_KEY`) и установит скилл `1c-vibe-demo`.
+из env `LITELLM_API_KEY`) и установит скилл `1c-vibe-demo`. Базовые скиллы
+с локальной машины — `backlog`, `skill-maker`, `subagents` — подтянутся
+автоматически, если они установлены (в Git репы они не входят).
 
 ### 4.3 Модель: провайдер utmn (LiteLLM)
 

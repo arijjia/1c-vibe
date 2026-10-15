@@ -80,6 +80,26 @@ YAML
   cp -R "$REPO/mvp/skills/1c-vibe-demo" "$CLEANROOM/skills/"
   echo ">> скилл 1c-vibe-demo установлен"
 
+  # базовые скиллы с локальной машины (нет источника — тихо пропускаем;
+  # в Git не входят): backlog ведёт backlog/ репы в формате v1
+  if [ -d "$HOME/.agents/skills/backlog" ]; then
+    rm -rf "$CLEANROOM/skills/backlog"
+    cp -R "$HOME/.agents/skills/backlog" "$CLEANROOM/skills/backlog"
+    echo ">> доп. скилл: backlog"
+  fi
+  kb="$HOME/src2/kb/dsh"
+  if [ -d "$kb/.git" ]; then
+    for name in skill-maker subagents; do
+      tmpd="$(mktemp -d)" || continue
+      if git -C "$kb" archive master "skills/$name" 2>/dev/null | tar -x -C "$tmpd" 2>/dev/null; then
+        rm -rf "$CLEANROOM/skills/$name"
+        mv "$tmpd/skills/$name" "$CLEANROOM/skills/$name"
+        echo ">> доп. скилл: $name (kb/dsh master)"
+      fi
+      rm -rf "$tmpd"
+    done
+  fi
+
   # реестр воркспейсов: сессии открываются в корне этой репы, а не в
   # дефолтной папке dsh (иначе агент не видит AGENTS.md и скилл репы;
   # формат — workspace domain v2)
