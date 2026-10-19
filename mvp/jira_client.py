@@ -2,9 +2,11 @@
 """Мини-клиент Jira для MVP 1c-vibe.
 
 Умеет:
-  get    ISSUE-KEY          — показать постановку задачи;
+  get    ISSUE-KEY          — показать постановку задачи (со статусом);
   comment ISSUE-KEY "текст" — добавить комментарий;
-  search "JQL"              — найти задачи (ключ, статус, метки).
+  search "JQL"              — найти задачи (ключ, статус, метки);
+  move   ISSUE-KEY "Статус" — переместить задачу в колонку (статус) доски;
+  status ISSUE-KEY          — показать текущий статус задачи.
 
 Аутентификация: Personal Access Token (Jira Server / Data Center),
 заголовок `Authorization: Bearer <JIRA_TOKEN>`.
@@ -128,11 +130,12 @@ def description_text(value) -> str:
 
 def get_issue(key: str) -> None:
     encoded_key = urllib.parse.quote(key, safe="")
-    issue = api("GET", f"{API}/issue/{encoded_key}")
+    issue = api("GET", f"{API}/issue/{encoded_key}?fields=summary,description,status")
     if not isinstance(issue, dict):
         sys.exit("Jira вернула неожиданный ответ при чтении задачи")
     fields = issue.get("fields", {})
-    print(f"{issue.get('key')}: {fields.get('summary', '')}")
+    status = (fields.get("status") or {}).get("name", "?")
+    print(f"{issue.get('key')} [{status}]: {fields.get('summary', '')}")
     print("-" * 60)
     print(description_text(fields.get("description")))
 
@@ -141,6 +144,53 @@ def add_comment(key: str, text: str) -> None:
     encoded_key = urllib.parse.quote(key, safe="")
     api("POST", f"{API}/issue/{encoded_key}/comment", {"body": text})
     print(f"Комментарий добавлен к {key}.")
+
+
+def transition_issue(key: str, to_status: str) -> str:
+    """Перевести задачу в статус ``to_status``; вернуть id выполненного перехода.
+
+    Бросает LookupError, если из текущего статуса в ``to_status`` перехода нет.
+    """
+    encoded_key = urllib.parse.quote(key, safe="")
+    data = api("GET", f"{API}/issue/{encoded_key}/transitions")
+    transitions = data.get("transitions") if isinstance(data, dict) else None
+    if not isinstance(transitions, list):
+        sys.exit("Jira вернула неожиданный ответ при чтении переходов")
+    wanted = to_status.strip().lower()
+    for transition in transitions:
+        if ((transition.get("to") or {}).get("name") or "").lower() == wanted:
+            api(
+                "POST",
+                f"{API}/issue/{encoded_key}/transitions",
+                {"transition": {"id": transition["id"]}},
+            )
+            return str(transition["id"])
+    available = ", ".join(
+        sorted({(t.get("to") or {}).get("name", "?") for t in transitions})
+    )
+    raise LookupError(
+        f"из текущего статуса задачи {key} нет перехода в «{to_status}»; доступно: {available}"
+    )
+
+
+def move_issue(key: str, to_status: str) -> None:
+    """CLI-обёртка transition_issue: переместить задачу и показать новый статус."""
+    try:
+        transition_issue(key, to_status)
+    except LookupError as e:
+        sys.exit(str(e))
+    issue = api("GET", f"{API}/issue/{urllib.parse.quote(key, safe='')}?fields=status")
+    name = ((issue.get("fields") or {}).get("status") or {}).get("name", "?")
+    print(f"{key}: статус теперь «{name}».")
+
+
+def show_status(key: str) -> None:
+    issue = api("GET", f"{API}/issue/{urllib.parse.quote(key, safe='')}?fields=status,summary")
+    if not isinstance(issue, dict):
+        sys.exit("Jira вернула неожиданный ответ при чтении статуса")
+    fields = issue.get("fields", {})
+    name = (fields.get("status") or {}).get("name", "?")
+    print(f"{issue.get('key')} [{name}]: {fields.get('summary', '')}")
 
 
 def create_issue(project: str, summary: str, description: str,
@@ -187,6 +237,10 @@ def main() -> None:
         get_issue(key)
     elif cmd == "comment" and len(sys.argv) >= 4:
         add_comment(key, sys.argv[3])
+    elif cmd == "move" and len(sys.argv) >= 4:
+        move_issue(key, sys.argv[3])
+    elif cmd == "status":
+        show_status(key)
     elif cmd == "search":
         for issue in search_issues(key):
             labels = ",".join(issue["labels"])

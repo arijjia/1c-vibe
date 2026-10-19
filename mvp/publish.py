@@ -23,7 +23,7 @@ import urllib.parse
 
 from envconfig import load_env
 from gitlab_client import api as gitlab_api, encoded_path
-from jira_client import api as jira_api
+from jira_client import api as jira_api, transition_issue
 
 load_env()
 
@@ -202,19 +202,19 @@ def submit(
     git(repo, "add", "-A")
     if git(repo, "status", "--porcelain"):
         git(repo, "commit", "-m", f"feat({issue}): {summary}")
-        print("[1/4] коммит создан")
+        print("[1/5] коммит создан")
     else:
         ahead = git(repo, "rev-list", "--count", f"origin/{base}..HEAD")
         if ahead == "0":
             sys.exit("Изменений и неопубликованных коммитов нет.")
-        print(f"[1/4] новых изменений нет; используем готовые коммиты: {ahead}")
+        print(f"[1/5] новых изменений нет; используем готовые коммиты: {ahead}")
 
     push_branch(repo, branch, scheme)
-    print(f"[2/4] ветка запушена: {branch}")
+    print(f"[2/5] ветка запушена: {branch}")
 
     mr = find_open_mr(project["id"], branch)
     if mr:
-        print(f"[3/4] используем уже открытый MR: {mr['web_url']}")
+        print(f"[3/5] используем уже открытый MR: {mr['web_url']}")
     else:
         jira_url = os.environ.get("JIRA_URL", "").rstrip("/")
         mr = gitlab_api(
@@ -233,7 +233,7 @@ def submit(
         )
         if not isinstance(mr, dict) or "web_url" not in mr:
             sys.exit("GitLab вернул неожиданный ответ при создании MR.")
-        print(f"[3/4] MR создан: {mr['web_url']}")
+        print(f"[3/5] MR создан: {mr['web_url']}")
 
     jira_api(
         "POST",
@@ -247,7 +247,21 @@ def submit(
             )
         },
     )
-    print(f"[4/4] комментарий добавлен в {issue}")
+    print(f"[4/5] комментарий добавлен в {issue}")
+
+    # Переводим задачу в «Готово»: человек видит на доске, что решение
+    # подготовлено и ждёт его подтверждения (ревью + вливание MR).
+    review_status = os.environ.get("JIRA_REVIEW_STATUS", "Готово")
+    try:
+        transition_issue(issue, review_status)
+    except (LookupError, SystemExit) as exc:
+        print(
+            f"ВНИМАНИЕ: не удалось переместить {issue} в «{review_status}» ({exc}).\n"
+            f"Перемести вручную: python3 jira_client.py move {issue} \"{review_status}\"",
+            file=sys.stderr,
+        )
+    else:
+        print(f"[5/5] {issue} → «{review_status}» — задача ждёт подтверждения человека")
     print(f"\nГотово. MR: {mr['web_url']}")
 
 
