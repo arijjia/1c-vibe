@@ -4,6 +4,7 @@ mvp/.env
 
 # python
 __pycache__/
+.pytest_cache/
 *.pyc
 
 # macOS / редакторы
